@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+        }
+        canvas {
+            display: block;
+        }
+        #question {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 2em;
+            text-align: center;
+            display: none;
+            z-index: 10;
+        }
+        .option {
+            cursor: pointer;
+            margin: 20px;
+            padding: 10px 20px;
+            border: 2px solid pink;
+            border-radius: 5px;
+            display: inline-block;
+            transition: all 0.3s;
+        }
+        #poem {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: pink;
+            font-size: 1.2em;
+            text-align: center;
+            line-height: 2;
+            display: none;
+            z-index: 20;
+            max-width: 80%;
+            text-shadow: 0 0 5px rgba(255,192,203,0.5);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="question">
+        <p>你喜欢我吗？</p>
+        <span id="loveOption" class="option">爱</span>
+        <span id="nopeOption" class="option">不爱</span>
+    </div>
+    <div id="poem"></div>
+
+    <script>
+        // 初始化画布
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const questionEl = document.getElementById('question');
+        const loveOption = document.getElementById('loveOption');
+        const nopeOption = document.getElementById('nopeOption');
+        const poemEl = document.getElementById('poem');
+        
+        // 设置画布尺寸
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+        
+        // 粒子系统
+        let particles = [];
+        let stars = [];
+        let stage = 'fireworks';
+        let loveTextIndex = 0;
+        const loveTexts = ['爱', '求你了', '真的要放弃吗？', '呜呜呜', '你真的不爱我吗？', '好吧……'];
+        const PINK_HUE = 330;
+        const STAR_COUNT = 100;
+
+        // 粒子类
+        class Particle {
+            constructor(x, y, targetX, targetY, isStar = false) {
+                this.x = x;
+                this.y = y;
+                this.targetX = targetX;
+                this.targetY = targetY;
+                this.speed = isStar ? Math.random()*0.5+0.1 : Math.random()*2+1;
+                this.size = isStar ? Math.random()*1.5+0.5 : Math.random()*2+1;
+                this.color = isStar ? `rgba(255,255,255,${Math.random()*0.8+0.2})` 
+                                    : `hsl(${PINK_HUE + Math.random()*30}, 70%, 60%)`;
+                this.angle = Math.random() * Math.PI * 2;
+                this.isStar = isStar;
+                this.life = 0;
+            }
+
+            update() {
+                const dx = this.targetX - this.x;
+                const dy = this.targetY - this.y;
+                this.x += dx * 0.05;
+                this.y += dy * 0.05;
+                this.life++;
+                
+                if(!this.isStar) {
+                    this.size = Math.abs(Math.sin(Date.now()/1000 + this.angle)) * 2.5;
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            isOutOfScreen() {
+                return this.x < -50 || this.x > width+50 || 
+                       this.y < -50 || this.y > height+50;
+            }
+        }
+
+        // 初始化星空
+        function initStars() {
+            for(let i=0; i<STAR_COUNT; i++) {
+                stars.push(new Particle(
+                    Math.random()*width,
+                    Math.random()*height,
+                    Math.random()*width,
+                    Math.random()*height,
+                    true
+                ));
+            }
+        }
+
+        // 管理星空粒子
+        function manageStars() {
+            // 移除超出边界的粒子
+            stars = stars.filter(star => !star.isOutOfScreen());
+            
+            // 补充新粒子
+            while(stars.length < STAR_COUNT) {
+                const side = Math.floor(Math.random()*4);
+                let x, y;
+                switch(side) {
+                    case 0: x = -50; y = Math.random()*height; break;
+                    case 1: x = width+50; y = Math.random()*height; break;
+                    case 2: x = Math.random()*width; y = -50; break;
+                    case 3: x = Math.random()*width; y = height+50; break;
+                }
+                stars.push(new Particle(
+                    x, y,
+                    Math.random()*width,
+                    Math.random()*height,
+                    true
+                ));
+            }
+        }
+
+        // 创建烟花
+        function createFirework() {
+            const centerX = width/2;
+            const centerY = height/2;
+            particles = [];
+            
+            for(let i=0; i<150; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.random() * width * 0.1;
+                particles.push(new Particle(
+                    centerX,
+                    centerY,
+                    centerX + Math.cos(angle)*radius,
+                    centerY + Math.sin(angle)*radius
+                ));
+            }
+        }
+
+        // Bresenham直线算法（完全保留您的原始实现）
+        function bresenham(x0, y0, x1, y1) {
+            const points = [];
+            const dx = Math.abs(x1 - x0);
+            const dy = Math.abs(y1 - y0);
+            const sx = x0 < x1 ? 1 : -1;
+            const sy = y0 < y1 ? 1 : -1;
+            let err = dx - dy;
+            
+            while(true) {
+                points.push({x: x0, y: y0});
+                if(x0 === x1 && y0 === y1) break;
+                const e2 = 2*err;
+                if(e2 > -dy) { err -= dy; x0 += sx; }
+                if(e2 < dx) { err += dx; y0 += sy; }
+            }
+            return points;
+        }
+
+        // 数字模板定义（完全保留您的原始设计）
+        function getNumberSegments(num) {
+            const segments = [];
+            if(num === 5) {
+                segments.push([0,0,50,0], [0,0,0,25], [0,25,50,25], 
+                             [50,25,50,50], [0,50,50,50]);
+            } else if(num === 2) {
+                segments.push([0,0,50,0], [50,0,50,25], [0,25,50,25], 
+                             [0,25,0,50], [0,50,50,50]);
+            } else if(num === 0) {
+                segments.push([0,0,50,0], [50,0,50,50], [0,50,50,50], 
+                             [0,0,0,50]);
+            }
+            return segments;
+        }
+
+        // 创建520数字（完全保留您的算法）
+        function create520() {
+            particles = [];
+            const scale = 0.6;  // 仅调整缩放比例，不改变算法
+            const spacing = width * 0.04;
+            const numbers = [5, 2, 0];
+            let startX = (width - (50*3*scale + spacing*2)) / 2;
+            
+            numbers.forEach(num => {
+                const segments = getNumberSegments(num);
+                segments.forEach(segment => {
+                    const [x1, y1, x2, y2] = segment;
+                    const points = bresenham(x1, y1, x2, y2);
+                    points.forEach(p => {
+                        particles.push(new Particle(
+                            Math.random()*width,
+                            Math.random()*height,
+                            startX + p.x*scale,
+                            height/2 - 25*scale + p.y*scale
+                        ));
+                    });
+                });
+                startX += 50*scale + spacing;
+            });
+        }
+
+        // 创建问题文字
+        function createQuestion() {
+            particles = [];
+            const text = "你喜欢我吗？";
+            const fontSize = Math.min(width * 0.15, 80);
+            ctx.font = `${fontSize}px Arial`;
+            const textWidth = ctx.measureText(text).width;
+            const centerX = (width - textWidth)/2;
+            const centerY = height/2 - 100;
+            
+            // 生成粉色文字粒子
+            for(let i=0; i<300; i++) {
+                const x = centerX + Math.random()*textWidth;
+                const y = centerY - fontSize/2 + Math.random()*fontSize;
+                const p = new Particle(
+                    Math.random()*width,
+                    Math.random()*height,
+                    x, y
+                );
+                p.color = `hsla(${PINK_HUE}, 80%, 70%, 0.8)`;
+                particles.push(p);
+            }
+        }
+
+        // 显示诗歌（完全保留您的原始文本）
+        function showPoem() {
+            poemEl.innerHTML = `《时间邮差》<br><br>
+                我们的名字被叠进同一只沙漏<br>
+                玻璃的褶皱间，风铃草正数着<br>
+                潮汐的节拍。所有未寄出的信<br>
+                都成为候鸟翅膀下融化的雪水<br><br>
+                
+                第七个月亮升起时，瓷器在暗处<br>
+                裂开细小的纹路。你用指纹修补<br>
+                每一道闪电的枝桠，而我数着<br>
+                钟摆锈蚀的刻度，等待盐粒返航<br><br>
+                
+                琥珀在抽屉深处编织经纬线<br>
+                那些被熨平的褶皱，正在成为<br>
+                另一种年轮。当最后一片落叶<br>
+                坠入信箱，所有的沉默都开始<br>
+                向黎明的邮筒倾斜。<br><br>
+                
+                <span style="font-size:1.2em;color:#ff69b4;">祝我们的爱情永不会随着时间而消散!</span>`;
+            poemEl.style.display = 'block';
+            
+            // 创建庆祝烟花
+            createFirework();
+        }
+
+        // 事件监听（完全保留您的交互逻辑）
+        nopeOption.addEventListener('click', () => {
+            // 移动"不爱"按钮
+            nopeOption.style.position = 'absolute';
+            nopeOption.style.left = Math.random()*(width-100)+'px';
+            nopeOption.style.top = Math.random()*(height-50)+'px';
+            
+            // 更新"爱"选项文字
+            if(loveTextIndex < loveTexts.length-1) {
+                loveTextIndex++;
+                loveOption.textContent = loveTexts[loveTextIndex];
+                if(loveTextIndex === loveTexts.length-1) {
+                    setTimeout(() => {
+                        poemEl.textContent = "再见...";
+                        poemEl.style.display = 'block';
+                        setTimeout(() => {
+                            document.body.innerHTML = '<h1 style="color:pink;text-align:center;margin-top:40vh">520快乐</h1>';
+                        }, 2000);
+                    }, 3000);
+                }
+            }
+        });
+
+        loveOption.addEventListener('click', () => {
+            if(loveTextIndex === 0) {
+                questionEl.style.display = 'none';
+                showPoem();
+            }
+        });
+
+        // 动画循环
+        function animate() {
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            ctx.fillRect(0, 0, width, height);
+
+            // 更新星空
+            manageStars();
+            stars.forEach(star => {
+                star.update();
+                star.draw();
+            });
+
+            // 更新主粒子
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            // 阶段控制
+            if(stage === 'fireworks' && particles.length === 0) {
+                createFirework();
+                setTimeout(() => {
+                    stage = 'show520';
+                    create520();
+                    setTimeout(() => {
+                        stage = 'question';
+                        questionEl.style.display = 'block';
+                        createQuestion();
+                    }, 7000);
+                }, 1000);
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // 窗口大小调整
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        });
+
+        // 初始化并启动
+        initStars();
+        animate();
+    </script>
+</body>
+</html>
